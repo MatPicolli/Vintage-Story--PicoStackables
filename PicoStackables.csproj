@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PicoStackables</AssemblyName>
+    <RootNamespace>PicoStackables</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin/$(Configuration)</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Reference the VS API from NuGet. Pin to 1.22.3 to match the target game version.
+      If you develop locally with the game installed, you can switch these to HintPath
+      references pointing to your VintagestoryData/Mods directory instead.
+    -->
+    <PackageReference Include="VintagestoryAPI" Version="1.22.3" />
+  </ItemGroup>
+
+  <!--
+    ConfigLib is distributed as a VS mod, not a NuGet package.
+    Place ConfigLib.dll (from the mod zip) in lib/ and uncomment the block below.
+    The mod works without it – live-reload is simply unavailable in that case.
+
+  <ItemGroup>
+    <Reference Include="ConfigLib">
+      <HintPath>lib/ConfigLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <DefineConstants>CONFIGLIB</DefineConstants>
+  </ItemGroup>
+  -->
+
+</Project>
