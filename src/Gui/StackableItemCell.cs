@@ -34,13 +34,14 @@ public class StackableItemCell : IGuiElementCell
     private bool  lastBakedHasOvr;
     private int   lastBakedOvr;
 
-    // Row height in scaled pixels
-    private const int CellH   = 54;
+    // Row height in unscaled pixels (used by the cell list to lay rows out)
+    public const int CellH    = 54;
     private const int IconSize = 40;
     private const int IconPad  = 7;
     private const int TextOffX = IconPad + IconSize + 6;
 
-    public ElementBounds Bounds { get; }
+    // Set by the cell list (via the factory) – never construct our own here.
+    public ElementBounds Bounds { get; set; } = null!;
 
     public StackableItemCell(
         ICoreClientAPI capi,
@@ -48,7 +49,6 @@ public class StackableItemCell : IGuiElementCell
         string         code,
         bool           isBlock,
         int            originalStack,
-        ElementBounds  bounds,
         Func<float>    getMultiplier,
         Action<StackableItemCell>? onRightClick = null)
     {
@@ -59,7 +59,6 @@ public class StackableItemCell : IGuiElementCell
         this.OriginalStack = originalStack;
         this.getMultiplier = getMultiplier;
         this.onRightClick  = onRightClick;
-        Bounds             = bounds;
     }
 
     // IGuiElementCell – required interface members
@@ -68,7 +67,12 @@ public class StackableItemCell : IGuiElementCell
 
     public void Compose() { }
     public void UpdateCellEdit(ICoreClientAPI api, bool editing, int cellIndex) { }
-    public void UpdateCellHeight() { }
+
+    public void UpdateCellHeight()
+    {
+        Bounds.fixedHeight = CellH;
+        Bounds.CalcWorldBounds();
+    }
     public void OnMouseDownOnElement(MouseEvent e, int elementIndex) { }
     public void OnMouseUpOnElement(MouseEvent e, int elementIndex)
     {

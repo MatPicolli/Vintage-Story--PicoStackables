@@ -85,11 +85,10 @@ public class GuiDialogStackables : GuiDialog
             if (item == null) continue;
 
             var stack  = new ItemStack(item);
-            var bounds = ElementBounds.Fixed(0, 0, CellW, CellH); // y set by GetItemY
 
             var cell = new StackableItemCell(
                 capi, stack, code, isBlock: false,
-                originalStack: origStack, bounds,
+                originalStack: origStack,
                 getMultiplier: () => currentMultiplier,
                 onRightClick: OnCellRightClick);
 
@@ -110,11 +109,10 @@ public class GuiDialogStackables : GuiDialog
             if (block == null) continue;
 
             var stack  = new ItemStack(block);
-            var bounds = ElementBounds.Fixed(0, 0, CellW, CellH);
 
             var cell = new StackableItemCell(
                 capi, stack, code, isBlock: true,
-                originalStack: origStack, bounds,
+                originalStack: origStack,
                 getMultiplier: () => currentMultiplier,
                 onRightClick: OnCellRightClick);
 
@@ -138,10 +136,7 @@ public class GuiDialogStackables : GuiDialog
             : allCells.Where(c => c.Code.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                                   c.stack.GetName().Contains(q, StringComparison.OrdinalIgnoreCase))
                       .ToList();
-
-        // Re-position cell bounds vertically
-        for (int i = 0; i < filteredCells.Count; i++)
-            filteredCells[i].Bounds.fixedY = i * CellH;
+        // The cell list lays cells out vertically itself; no manual Y positioning needed.
     }
 
     // -------------------------------------------------------------------------
@@ -244,10 +239,14 @@ public class GuiDialogStackables : GuiDialog
         }
     }
 
-    // Factory delegate required by AddCellList – receives a data item and its
-    // position bounds; we pre-build cells so just return the cell itself.
+    // Factory delegate required by AddCellList. The cell list creates a properly
+    // parented `bounds` for each row and hands it to us; we MUST adopt that bounds
+    // (and the clip bounds) or the list will dereference null during rendering.
     private IGuiElementCell RequireCell(StackableItemCell cell, ElementBounds bounds)
     {
+        bounds.fixedHeight = StackableItemCell.CellH;
+        cell.Bounds           = bounds;
+        cell.InsideClipBounds = clipBounds;
         return cell;
     }
 
