@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PicoStackables</AssemblyName>
     <RootNamespace>PicoStackables</RootNamespace>
+    <!-- Keep this in sync with the "version" field in modinfo.json -->
+    <Version>1.0.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin/$(Configuration)</OutputPath>
 
@@ -53,5 +55,31 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <!--
+    After a Release build, assemble a ModDB-ready zip in releases/ containing
+    ONLY modinfo.json + the DLL (+ modicon.png if present). The zip name carries
+    the version so successive uploads don't collide.
+  -->
+  <Target Name="PackageMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <StageDir>$(MSBuildProjectDirectory)/obj/modpackage</StageDir>
+      <ReleaseDir>$(MSBuildProjectDirectory)/releases</ReleaseDir>
+      <ZipPath>$(ReleaseDir)/PicoStackables_v$(Version).zip</ZipPath>
+    </PropertyGroup>
+
+    <RemoveDir Directories="$(StageDir)" />
+    <MakeDir Directories="$(StageDir);$(ReleaseDir)" />
+
+    <Copy SourceFiles="$(OutputPath)/PicoStackables.dll" DestinationFolder="$(StageDir)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/modinfo.json" DestinationFolder="$(StageDir)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/modicon.png" DestinationFolder="$(StageDir)"
+          Condition="Exists('$(MSBuildProjectDirectory)/modicon.png')" />
+
+    <Delete Files="$(ZipPath)" Condition="Exists('$(ZipPath)')" />
+    <ZipDirectory SourceDirectory="$(StageDir)" DestinationFile="$(ZipPath)" />
+
+    <Message Importance="high" Text="Packaged ModDB zip: $(ZipPath)" />
+  </Target>
 
 </Project>

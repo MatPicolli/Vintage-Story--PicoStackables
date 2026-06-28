@@ -5,7 +5,8 @@
   "description": "Multiplies item and block stack sizes globally, with per-item overrides and an in-game config dialog.",
   "authors": ["MatPicolli"],
   "version": "1.0.0",
-  "website": "",
+  "side": "Universal",
+  "website": "https://github.com/MatPicolli/Vintage-Story--PicoStackables",
   "dependencies": {
     "game": "1.22.3"
   }
