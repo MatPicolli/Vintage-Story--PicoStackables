@@ -1,29 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using PicoStackables.Network;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Config;
 
 namespace PicoStackables.Gui;
 
 /// <summary>
 /// In-game config dialog for PicoStackables.
 ///
-/// Layout (scaled units):
-///   ┌─ PicoStackables ────────────────────────────────[×]─┐
-///   │  Stack Multiplier: [2.0      ]                      │
-///   │  Search:           [_______________________]        │
-///   ├──────────────────────────────────────────────────   │
-///   │  [icon] Stick                              [scroll] │
-///   │         16 → 32                                     │
-///   │  [icon] Stone-Granite                               │
-///   │         64 → 128                                    │
-///   │  ...                                                │
-///   ├──────────────────────────────────────────────────   │
-///   │                    [  Save  ]  [  Close  ]          │
-///   └─────────────────────────────────────────────────────┘
+/// Top: global multiplier input + search box + a per-item override editor.
+/// Middle: a multi-column, scrollable grid of every item/block showing
+///         "original → new" with the new value in green (yellow for overrides).
+/// Bottom: Save / Close.
 /// </summary>
 public class GuiDialogStackables : GuiDialog
 {
@@ -31,198 +22,188 @@ public class GuiDialogStackables : GuiDialog
 
     private readonly PicoStackablesClientSystem clientSys;
 
-    // All cells, pre-built from server data; search filters into filteredCells
-    private List<StackableItemCell> allCells      = new();
-    private List<StackableItemCell> filteredCells = new();
+    private readonly List<StackableItem> allItems      = new();
+    private List<StackableItem>          filteredItems = new();
+    private List<StackableRowCell>       rowCells      = new();
+
+    private StackableItem? selected;
 
     private float  currentMultiplier = 2f;
     private string searchText        = "";
+    private long   searchDebounceId  = -1;
 
-    // Bounds that need to stay in scope for scroll callbacks
-    private ElementBounds clipBounds  = null!;
-    private ElementBounds listBounds  = null!;
+    private ElementBounds clipBounds = null!;
+    private ElementBounds listBounds = null!;
 
-    // Dialog dimensions (unscaled units)
-    private const double DialogW    = 520;
-    private const double DialogH    = 580;
-    private const double Pad        = 12;
-    private const double ListH      = 380;  // visible clip height
-    private const double CellH      = 54;
-    private const double CellW      = 460;  // list inner width (leaves room for scrollbar)
-    private const double ScrollbarW = 20;
+    // Layout (unscaled)
+    private const int    Columns   = 3;
+    private const double DialogW   = 760;
+    private const double DialogH   = 600;
+    private const double Pad       = 16;
+    private const double TopOffset = 32;   // clears the title bar
+    private const double RowH      = 30;
+    private const double ListH     = 392;
+    private const double ScrollW   = 20;
+
+    private double ListW => DialogW - Pad * 2 - ScrollW;
 
     public GuiDialogStackables(ICoreClientAPI capi, PicoStackablesClientSystem clientSys)
         : base(capi)
     {
         this.clientSys = clientSys;
         if (clientSys.ServerData != null)
-            BuildCells(clientSys.ServerData);
+            BuildItems(clientSys.ServerData);
         ComposeDialog();
     }
 
-    /// <summary>Called by the client system when fresh data arrives from the server.</summary>
     public void RefreshFromData(StackablesInitPacket data)
     {
-        currentMultiplier = data.GlobalMultiplier;
-        BuildCells(data);
+        BuildItems(data);
         ComposeDialog();
     }
 
     // -------------------------------------------------------------------------
-    // Cell construction
+    // Data
     // -------------------------------------------------------------------------
 
-    private void BuildCells(StackablesInitPacket data)
+    private void BuildItems(StackablesInitPacket data)
     {
         currentMultiplier = data.GlobalMultiplier;
 
-        allCells.Clear();
+        foreach (var it in allItems) it.Dispose();
+        allItems.Clear();
+        selected = null;
 
-        // Items
-        foreach (var (code, origStack) in data.OriginalItemStacks.OrderBy(k => k.Key))
+        foreach (var (code, orig) in data.OriginalItemStacks.OrderBy(k => k.Key))
         {
             var item = capi.World.GetItem(new AssetLocation(code));
             if (item == null) continue;
-
-            var stack  = new ItemStack(item);
-
-            var cell = new StackableItemCell(
-                capi, stack, code, isBlock: false,
-                originalStack: origStack,
-                getMultiplier: () => currentMultiplier,
-                onRightClick: OnCellRightClick);
-
-            if (data.ItemOverrides.TryGetValue(code, out int ov))
-            {
-                cell.HasOverride  = true;
-                cell.OverrideValue = ov;
-            }
-
-            allCells.Add(cell);
+            var si = new StackableItem(capi, new ItemStack(item), code, false, orig,
+                                       () => currentMultiplier);
+            if (data.ItemOverrides.TryGetValue(code, out int ov)) { si.HasOverride = true; si.OverrideValue = ov; }
+            allItems.Add(si);
         }
 
-        // Blocks (only those that can be stacked in inventory, i.e. origStack > 1 typically)
-        foreach (var (code, origStack) in data.OriginalBlockStacks.OrderBy(k => k.Key))
+        foreach (var (code, orig) in data.OriginalBlockStacks.OrderBy(k => k.Key))
         {
-            if (origStack <= 0) continue;
+            if (orig <= 0) continue;
             var block = capi.World.GetBlock(new AssetLocation(code));
             if (block == null) continue;
-
-            var stack  = new ItemStack(block);
-
-            var cell = new StackableItemCell(
-                capi, stack, code, isBlock: true,
-                originalStack: origStack,
-                getMultiplier: () => currentMultiplier,
-                onRightClick: OnCellRightClick);
-
-            if (data.BlockOverrides.TryGetValue(code, out int ov))
-            {
-                cell.HasOverride  = true;
-                cell.OverrideValue = ov;
-            }
-
-            allCells.Add(cell);
+            var si = new StackableItem(capi, new ItemStack(block), code, true, orig,
+                                       () => currentMultiplier);
+            if (data.BlockOverrides.TryGetValue(code, out int ov)) { si.HasOverride = true; si.OverrideValue = ov; }
+            allItems.Add(si);
         }
 
-        ApplyFilter();
+        RebuildRows();
     }
 
-    private void ApplyFilter()
+    private void RebuildRows()
     {
-        string q = searchText.ToLowerInvariant();
-        filteredCells = string.IsNullOrEmpty(q)
-            ? allCells
-            : allCells.Where(c => c.Code.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                                  c.stack.GetName().Contains(q, StringComparison.OrdinalIgnoreCase))
-                      .ToList();
-        // The cell list lays cells out vertically itself; no manual Y positioning needed.
+        string q = searchText.Trim().ToLowerInvariant();
+        filteredItems = string.IsNullOrEmpty(q)
+            ? allItems
+            : allItems.Where(i => i.SearchKey.Contains(q)).ToList();
+
+        rowCells = new List<StackableRowCell>((filteredItems.Count + Columns - 1) / Columns);
+        for (int i = 0; i < filteredItems.Count; i += Columns)
+        {
+            int count = Math.Min(Columns, filteredItems.Count - i);
+            rowCells.Add(new StackableRowCell(
+                filteredItems.GetRange(i, count), Columns, OnItemClicked));
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Dialog composition
+    // Composition
     // -------------------------------------------------------------------------
 
     private void ComposeDialog()
     {
-        double headerH  = 30; // title bar (added automatically)
-        double innerH   = DialogH - headerH;
-
-        // Full dialog area
         var dialogBounds = ElementBounds.Fixed(0, 0, DialogW, DialogH)
             .WithAlignment(EnumDialogArea.CenterMiddle);
-
-        // Background fills dialog
         var bgBounds = ElementBounds.Fill.WithFixedPadding(0);
 
-        // ── Rows inside the dialog ──────────────────────────────────────────
+        double y = TopOffset + Pad;
 
-        double rowY = Pad;
+        var multLabel = ElementBounds.Fixed(Pad, y, 210, RowH);
+        var multInput = ElementBounds.Fixed(Pad + 215, y, 90, RowH);
+        y += RowH + 8;
 
-        // Multiplier label + input
-        var multLabelBounds = ElementBounds.Fixed(Pad, rowY, 160, 28);
-        var multInputBounds = ElementBounds.Fixed(Pad + 165, rowY, 100, 28);
-        rowY += 36;
+        var searchLabel = ElementBounds.Fixed(Pad, y, 70, RowH);
+        var searchInput = ElementBounds.Fixed(Pad + 75, y, ListW - 75, RowH);
+        y += RowH + 8;
 
-        // Search label + input
-        var searchLabelBounds = ElementBounds.Fixed(Pad, rowY, 60, 28);
-        var searchInputBounds = ElementBounds.Fixed(Pad + 65, rowY, CellW - 65, 28);
-        rowY += 40;
+        // Override editor row
+        var selLabel  = ElementBounds.Fixed(Pad, y, 320, RowH);
+        var ovLabel   = ElementBounds.Fixed(Pad + 330, y, 90, RowH);
+        var ovInput   = ElementBounds.Fixed(Pad + 420, y, 70, RowH);
+        var setBtn    = ElementBounds.Fixed(Pad + 495, y, 80, RowH);
+        var clearBtn  = ElementBounds.Fixed(Pad + 580, y, 110, RowH);
+        y += RowH + 10;
 
-        // Cell list clip + scrollbar
-        clipBounds = ElementBounds.Fixed(Pad, rowY, CellW, ListH);
-        listBounds = ElementBounds.Fixed(0, 0, CellW, filteredCells.Count * CellH)
+        clipBounds = ElementBounds.Fixed(Pad, y, ListW, ListH);
+        listBounds = ElementBounds.Fixed(0, 0, ListW, rowCells.Count * StackableRowCell.CellH)
             .WithParent(clipBounds);
-        var scrollbarBounds = ElementStdBounds.VerticalScrollbar(clipBounds);
-        rowY += ListH + Pad;
+        var scrollBounds = ElementStdBounds.VerticalScrollbar(clipBounds);
+        y += ListH + 12;
 
-        // Buttons
-        var saveBounds  = ElementBounds.Fixed(DialogW - Pad - 200, rowY, 90, 30);
-        var closeBounds = ElementBounds.Fixed(DialogW - Pad - 100, rowY, 90, 30);
+        var saveBtn  = ElementBounds.Fixed(DialogW - Pad - 200, y, 90, 32);
+        var closeBtn = ElementBounds.Fixed(DialogW - Pad - 100, y, 90, 32);
+
+        var font     = CairoFont.WhiteSmallText();
+        var detail   = CairoFont.WhiteDetailText();
 
         SingleComposer = capi.Gui
             .CreateCompo("picostackables", dialogBounds)
             .AddShadedDialogBG(bgBounds, withTitleBar: true)
-            .AddDialogTitleBar("PicoStackables – Stack Sizes", OnTitleClose)
+            .AddDialogTitleBar("PicoStackables – Stack Sizes", () => TryClose())
             .BeginChildElements(bgBounds)
 
-                // Multiplier row
-                .AddStaticText("Stack Multiplier:", CairoFont.WhiteSmallText(), multLabelBounds)
-                .AddTextInput(multInputBounds, OnMultiplierChanged, CairoFont.WhiteDetailText(), "multInput")
+                .AddStaticText("Global Stack Multiplier:", font, multLabel)
+                .AddNumberInput(multInput, OnMultiplierChanged, detail, "multInput")
 
-                // Search row
-                .AddStaticText("Search:", CairoFont.WhiteSmallText(), searchLabelBounds)
-                .AddTextInput(searchInputBounds, OnSearchChanged, CairoFont.WhiteDetailText(), "searchInput")
+                .AddStaticText("Search:", font, searchLabel)
+                .AddTextInput(searchInput, OnSearchChanged, detail, "searchInput")
 
-                // Scrollable item list
+                .AddDynamicText("Click an item to edit its stack size", font, selLabel, "selLabel")
+                .AddStaticText("Set to:", font, ovLabel)
+                .AddNumberInput(ovInput, _ => { }, detail, "ovInput")
+                .AddSmallButton("Apply", OnApplyOverride, setBtn)
+                .AddSmallButton("Use multiplier", OnClearOverride, clearBtn)
+
                 .BeginClip(clipBounds)
-                    .AddCellList(listBounds, RequireCell, filteredCells, "cellList")
+                    .AddCellList(listBounds, RequireCell, rowCells, "cellList")
                 .EndClip()
-                .AddVerticalScrollbar(OnScroll, scrollbarBounds, "scrollbar")
+                .AddVerticalScrollbar(OnScroll, scrollBounds, "scrollbar")
 
-                // Buttons
-                .AddSmallButton("Save",  OnSave,     saveBounds)
-                .AddSmallButton("Close", OnCloseBtnClick, closeBounds)
+                .AddSmallButton("Save",  OnSave,    saveBtn)
+                .AddSmallButton("Close", () => { TryClose(); return true; }, closeBtn)
 
             .EndChildElements()
             .Compose();
 
-        // Seed text inputs with current values
-        SingleComposer.GetTextInput("multInput").SetValue(currentMultiplier.ToString("0.##"));
+        SingleComposer.GetNumberInput("multInput").SetValue(currentMultiplier.ToString("0.##", CultureInfo.InvariantCulture));
         SingleComposer.GetTextInput("searchInput").SetPlaceHolderText("item code or name…");
+        if (!string.IsNullOrEmpty(searchText))
+            SingleComposer.GetTextInput("searchInput").SetValue(searchText);
 
         SyncScrollbar();
     }
 
+    private IGuiElementCell RequireCell(StackableRowCell cell, ElementBounds bounds)
+    {
+        bounds.fixedHeight    = StackableRowCell.CellH;
+        cell.Bounds           = bounds;
+        cell.InsideClipBounds = clipBounds;
+        return cell;
+    }
+
     private void SyncScrollbar()
     {
-        if (SingleComposer == null) return;
-        var list      = SingleComposer.GetCellList<StackableItemCell>("cellList");
-        var scrollbar = SingleComposer.GetScrollbar("scrollbar");
-        if (list == null || scrollbar == null) return;
-
-        double totalH = filteredCells.Count * CellH;
-        scrollbar.SetHeights((float)ListH, (float)totalH);
+        var scrollbar = SingleComposer?.GetScrollbar("scrollbar");
+        if (scrollbar == null) return;
+        scrollbar.SetHeights((float)ListH, (float)(rowCells.Count * StackableRowCell.CellH));
     }
 
     // -------------------------------------------------------------------------
@@ -231,73 +212,97 @@ public class GuiDialogStackables : GuiDialog
 
     private void OnMultiplierChanged(string val)
     {
-        if (float.TryParse(val, System.Globalization.NumberStyles.Float,
-                           System.Globalization.CultureInfo.InvariantCulture, out float f))
-        {
+        if (float.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out float f))
             currentMultiplier = Math.Max(0.01f, f);
-            // Cells read currentMultiplier via their Func<float> and re-bake automatically
-        }
-    }
-
-    // Factory delegate required by AddCellList. The cell list creates a properly
-    // parented `bounds` for each row and hands it to us; we MUST adopt that bounds
-    // (and the clip bounds) or the list will dereference null during rendering.
-    private IGuiElementCell RequireCell(StackableItemCell cell, ElementBounds bounds)
-    {
-        bounds.fixedHeight = StackableItemCell.CellH;
-        cell.Bounds           = bounds;
-        cell.InsideClipBounds = clipBounds;
-        return cell;
+        // Visible cells re-bake automatically via their getMultiplier closure.
     }
 
     private void OnSearchChanged(string val)
     {
         searchText = val;
-        ApplyFilter();
 
-        var list = SingleComposer?.GetCellList<StackableItemCell>("cellList");
+        // Debounce: only refilter ~250ms after the last keystroke to avoid stutter.
+        if (searchDebounceId >= 0) capi.Event.UnregisterCallback(searchDebounceId);
+        searchDebounceId = capi.Event.RegisterCallback(_ => ApplySearch(), 250);
+    }
+
+    private void ApplySearch()
+    {
+        searchDebounceId = -1;
+        RebuildRows();
+
+        var list = SingleComposer?.GetCellList<StackableRowCell>("cellList");
         if (list == null) return;
 
-        list.ReloadCells(filteredCells);
+        list.ReloadCells(rowCells);
+        list.Bounds.fixedY = 0;
+        list.Bounds.CalcWorldBounds();
         SyncScrollbar();
     }
 
     private void OnScroll(float val)
     {
-        var list = SingleComposer?.GetCellList<StackableItemCell>("cellList");
+        var list = SingleComposer?.GetCellList<StackableRowCell>("cellList");
         if (list == null) return;
-
         list.Bounds.fixedY = -val;
         list.Bounds.CalcWorldBounds();
     }
 
-    // Called by StackableItemCell.OnMouseUpOnElement to toggle overrides.
-    internal void OnCellRightClick(StackableItemCell cell)
+    private void OnItemClicked(StackableItem item, bool rightClick)
     {
-        if (cell.HasOverride)
+        if (rightClick)
         {
-            cell.HasOverride = false;
+            // Quick toggle override on/off
+            if (item.HasOverride) item.HasOverride = false;
+            else { item.HasOverride = true; item.OverrideValue = item.ComputeStack(currentMultiplier); }
+            if (item == selected) LoadSelectionIntoEditor();
+            return;
         }
-        else
+
+        if (selected != null) selected.Selected = false;
+        selected = item;
+        item.Selected = true;
+        LoadSelectionIntoEditor();
+    }
+
+    private void LoadSelectionIntoEditor()
+    {
+        if (selected == null) return;
+        SingleComposer.GetDynamicText("selLabel")
+            .SetNewText($"{selected.DisplayName}  ({selected.Code})");
+        int val = selected.HasOverride ? selected.OverrideValue : selected.ComputeStack(currentMultiplier);
+        SingleComposer.GetNumberInput("ovInput").SetValue(val.ToString());
+    }
+
+    private bool OnApplyOverride()
+    {
+        if (selected == null) return true;
+        string raw = SingleComposer.GetNumberInput("ovInput").GetText();
+        if (int.TryParse(raw, out int v) && v > 0)
         {
-            // Default the override to current computed size so the user can adjust from there
-            float mult    = currentMultiplier;
-            int computed  = Math.Max(1, (int)Math.Round(cell.OriginalStack * mult));
-            cell.HasOverride  = true;
-            cell.OverrideValue = computed;
+            selected.HasOverride  = true;
+            selected.OverrideValue = v;
         }
+        return true;
+    }
+
+    private bool OnClearOverride()
+    {
+        if (selected == null) return true;
+        selected.HasOverride = false;
+        LoadSelectionIntoEditor();
+        return true;
     }
 
     private bool OnSave()
     {
-        var itemOvr  = new System.Collections.Generic.Dictionary<string, int>();
-        var blockOvr = new System.Collections.Generic.Dictionary<string, int>();
-
-        foreach (var cell in allCells)
+        var itemOvr  = new Dictionary<string, int>();
+        var blockOvr = new Dictionary<string, int>();
+        foreach (var it in allItems)
         {
-            if (!cell.HasOverride) continue;
-            if (cell.IsBlock) blockOvr[cell.Code] = cell.OverrideValue;
-            else              itemOvr[cell.Code]  = cell.OverrideValue;
+            if (!it.HasOverride) continue;
+            if (it.IsBlock) blockOvr[it.Code] = it.OverrideValue;
+            else            itemOvr[it.Code]  = it.OverrideValue;
         }
 
         clientSys.SendSave(new StackablesSavePacket
@@ -306,17 +311,8 @@ public class GuiDialogStackables : GuiDialog
             ItemOverrides    = itemOvr,
             BlockOverrides   = blockOvr,
         });
-
         return true;
     }
-
-    private bool OnCloseBtnClick()
-    {
-        TryClose();
-        return true;
-    }
-
-    private void OnTitleClose() => TryClose();
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -325,6 +321,7 @@ public class GuiDialogStackables : GuiDialog
     public override void OnGuiClosed()
     {
         base.OnGuiClosed();
+        if (searchDebounceId >= 0) capi.Event.UnregisterCallback(searchDebounceId);
         SingleComposer?.Dispose();
     }
 }
