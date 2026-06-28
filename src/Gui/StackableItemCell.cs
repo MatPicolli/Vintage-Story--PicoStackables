@@ -163,7 +163,11 @@ public class StackableItemCell : IGuiElementCell
         ctx.MoveTo(x, y2);
         ctx.ShowText(newStr + ovLabel);
 
-        capi.Gui.LoadOrUpdateCairoTexture(surface, true, ref textTex);
+        // LoadOrUpdateCairoTexture requires a non-null LoadedTexture instance to
+        // write into (it may be empty, but a null ref crashes inside GLImpl).
+        var tex = textTex ?? new LoadedTexture(capi);
+        capi.Gui.LoadOrUpdateCairoTexture(surface, true, ref tex);
+        textTex = tex;
     }
 
     private void DrawCell(ICoreClientAPI api)
