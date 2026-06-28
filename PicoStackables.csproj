@@ -9,6 +9,16 @@
     <OutputPath>bin/$(Configuration)</OutputPath>
 
     <!--
+      VS code mods must NOT ship a .deps.json: the game's mod loader reads it and
+      tries to load this assembly a second time when you re-enter a world, throwing
+      "Assembly with same name is already loaded". Disable its generation and the
+      debug symbols so the build output is just the bare DLL.
+    -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+
+    <!--
       Point this to your Vintage Story installation folder.
       Default Steam path:   C:\Program Files (x86)\Steam\steamapps\common\Vintage Story
       Default standalone:   C:\Program Files\Vintagestory
