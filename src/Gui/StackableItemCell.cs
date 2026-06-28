@@ -58,11 +58,16 @@ public class StackableItemCell : IGuiElementCell
         Bounds             = bounds;
     }
 
-    // Called by GuiElementCellList before the list is drawn the first time
-    public void Compose() { }
+    // IGuiElementCell – required interface members
+    public ElementBounds InsideClipBounds { get; set; } = null!;
+    public string MouseOverCursor => null!;
 
-    // Not used (no editable sub-elements inside each cell)
+    public void Compose() { }
     public void UpdateCellEdit(ICoreClientAPI api, bool editing, int cellIndex) { }
+    public void UpdateCellHeight() { }
+    public void OnMouseDownOnElement(MouseEvent e, int elementIndex) { }
+    public void OnMouseUpOnElement(MouseEvent e, int elementIndex) { }
+    public void OnMouseMoveOnElement(MouseEvent e, int elementIndex) { }
 
     public void OnRenderInteractiveElements(ICoreClientAPI api, float dt)
     {
