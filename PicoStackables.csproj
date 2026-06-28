@@ -15,7 +15,7 @@
       You can also set VS_INSTALL_DIR as a system environment variable
       and remove the hard-coded fallback below.
     -->
-    <VSInstallDir Condition="'$(VSInstallDir)' == ''">C:\Program Files\Vintagestory</VSInstallDir>
+    <VSInstallDir Condition="'$(VSInstallDir)' == ''">D:\Vintagestory</VSInstallDir>
   </PropertyGroup>
 
   <ItemGroup>
