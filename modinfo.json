@@ -8,6 +8,6 @@
   "side": "Universal",
   "website": "https://github.com/MatPicolli/Vintage-Story--PicoStackables",
   "dependencies": {
-    "game": "1.22.3"
+    "game": "1.22.0"
   }
 }
