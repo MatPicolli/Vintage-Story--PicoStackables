@@ -7,29 +7,58 @@
     <RootNamespace>PicoStackables</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin/$(Configuration)</OutputPath>
+
+    <!--
+      Point this to your Vintage Story installation folder.
+      Default Steam path:   C:\Program Files (x86)\Steam\steamapps\common\Vintage Story
+      Default standalone:   C:\Program Files\Vintagestory
+      You can also set VS_INSTALL_DIR as a system environment variable
+      and remove the hard-coded fallback below.
+    -->
+    <VSInstallDir Condition="'$(VSInstallDir)' == ''">C:\Program Files\Vintagestory</VSInstallDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      Reference the VS API from NuGet. Pin to 1.22.3 to match the target game version.
-      If you develop locally with the game installed, you can switch these to HintPath
-      references pointing to your VintagestoryData/Mods directory instead.
-    -->
-    <PackageReference Include="VintagestoryAPI" Version="1.22.3" />
+    <!-- Core API – required -->
+    <Reference Include="VintagestoryAPI">
+      <HintPath>$(VSInstallDir)\VintagestoryAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Client renderer – needed for IRenderAPI, GuiDialog, Cairo texture helpers -->
+    <Reference Include="Vintagestory">
+      <HintPath>$(VSInstallDir)\Vintagestory.exe</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Cairo (used in StackableItemCell for ImageSurface / Context) -->
+    <Reference Include="cairo-sharp">
+      <HintPath>$(VSInstallDir)\Lib\cairo-sharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ProtoBuf (network packets) -->
+    <Reference Include="protobuf-net">
+      <HintPath>$(VSInstallDir)\Lib\protobuf-net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <!--
-    ConfigLib is distributed as a VS mod, not a NuGet package.
-    Place ConfigLib.dll (from the mod zip) in lib/ and uncomment the block below.
-    The mod works without it – live-reload is simply unavailable in that case.
-
+    ConfigLib integration (optional).
+    1. Copy ConfigLib.dll from the mod zip into lib/ next to the .csproj.
+    2. Uncomment this block and rebuild.
+  -->
+  <!--
   <ItemGroup>
     <Reference Include="ConfigLib">
       <HintPath>lib/ConfigLib.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <DefineConstants>CONFIGLIB</DefineConstants>
   </ItemGroup>
+  <PropertyGroup>
+    <DefineConstants>CONFIGLIB</DefineConstants>
+  </PropertyGroup>
   -->
 
 </Project>
