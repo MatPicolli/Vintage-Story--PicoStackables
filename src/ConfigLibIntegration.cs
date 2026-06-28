@@ -2,9 +2,9 @@
 using System;
 using Vintagestory.API.Server;
 
-// Wraps the ConfigLib API so the main mod system stays clean.
-// This file is only compiled when the CONFIGLIB constant is defined in the .csproj.
-// See PicoStackables.csproj for instructions on how to enable it.
+// Compiled only when CONFIGLIB is defined in the .csproj (see instructions there).
+// Registers PicoStackables config with ConfigLib so server operators can also
+// edit it through ConfigLib's built-in config panel.
 
 namespace PicoStackables;
 
