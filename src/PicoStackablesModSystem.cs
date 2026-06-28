@@ -37,10 +37,6 @@ public class PicoStackablesModSystem : ModSystem
             .SetMessageHandler<StackablesSavePacket>(OnSaveReceived);
 
         sapi.Event.PlayerNowPlaying += OnPlayerNowPlaying;
-
-#if CONFIGLIB
-        ConfigLibIntegration.Register(sapi, config, OnConfigReloaded);
-#endif
     }
 
     public override void AssetsFinalize(ICoreAPI api)
@@ -92,14 +88,6 @@ public class PicoStackablesModSystem : ModSystem
     {
         config = api.LoadModConfig<PicoStackablesConfig>(ConfigFilename) ?? new();
         api.StoreModConfig(config, ConfigFilename);
-    }
-
-    private void OnConfigReloaded(PicoStackablesConfig newConfig)
-    {
-        config = newConfig;
-        api.StoreModConfig(config, ConfigFilename);
-        ApplyConfig(api);
-        api.Logger.Notification("[PicoStackables] Config reloaded via ConfigLib.");
     }
 
     private StackablesInitPacket BuildInitPacket() => new()

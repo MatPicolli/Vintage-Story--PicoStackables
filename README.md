@@ -1,6 +1,6 @@
 # PicoStackables
 
-A Vintage Story 1.22.3 server-side mod that multiplies item and block stack sizes, with a rich in-game config dialog and optional [ConfigLib](https://mods.vintagestory.at/configlib) integration.
+A Vintage Story 1.22.3 mod that multiplies item and block stack sizes, with a rich in-game config dialog.
 
 ## Features
 
@@ -13,7 +13,6 @@ A Vintage Story 1.22.3 server-side mod that multiplies item and block stack size
   - Override values shown in yellow
 - **Live multiplier preview** – changing the multiplier input instantly updates all visible stack previews without saving or reloading.
 - **Right-click an item** in the dialog to toggle a per-item override.
-- **ConfigLib integration** – if ConfigLib is installed, the config is also accessible from its config panel for server operators who prefer that workflow.
 
 ## Dialog
 
@@ -42,13 +41,7 @@ Right-clicking an item sets a per-item override equal to the current computed va
 dotnet build -c Release
 ```
 
-Package `bin/Release/PicoStackables.dll` together with `modinfo.json` into a `.zip` for distribution.
-
-### Enabling ConfigLib support
-
-1. Download ConfigLib and extract `ConfigLib.dll` into `lib/`.
-2. Uncomment the `<Reference>` block in `PicoStackables.csproj`.
-3. Rebuild.
+Package `bin/Release/PicoStackables.dll` together with `modinfo.json` into a `.zip` for distribution. The zip must contain only those two files — do not include any `.deps.json`.
 
 ## Config file
 

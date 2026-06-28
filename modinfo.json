@@ -2,14 +2,11 @@
   "type": "code",
   "modid": "picostackables",
   "name": "PicoStackables",
-  "description": "Multiplies item and block stack sizes globally, with per-item overrides. Supports live config editing via ConfigLib.",
+  "description": "Multiplies item and block stack sizes globally, with per-item overrides and an in-game config dialog.",
   "authors": ["MatPicolli"],
   "version": "1.0.0",
   "website": "",
   "dependencies": {
     "game": "1.22.3"
-  },
-  "optionalDependencies": {
-    "configlib": ""
   }
 }

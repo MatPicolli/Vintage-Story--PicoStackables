@@ -54,21 +54,4 @@
     </Reference>
   </ItemGroup>
 
-  <!--
-    ConfigLib integration (optional).
-    1. Copy ConfigLib.dll from the mod zip into lib/ next to the .csproj.
-    2. Uncomment this block and rebuild.
-  -->
-  <!--
-  <ItemGroup>
-    <Reference Include="ConfigLib">
-      <HintPath>lib/ConfigLib.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
-  <PropertyGroup>
-    <DefineConstants>CONFIGLIB</DefineConstants>
-  </PropertyGroup>
-  -->
-
 </Project>
