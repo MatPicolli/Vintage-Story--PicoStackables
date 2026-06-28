@@ -2,6 +2,7 @@ using System;
 using Cairo;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
 namespace PicoStackables.Gui;
@@ -24,8 +25,9 @@ public class StackableItemCell : IGuiElementCell
     public int  OverrideValue;
 
     private readonly ICoreClientAPI capi;
-    internal readonly ItemStack     stack;
-    private readonly Func<float>    getMultiplier;
+    internal readonly ItemStack      stack;
+    private readonly Func<float>     getMultiplier;
+    private readonly Action<StackableItemCell>? onRightClick;
 
     private LoadedTexture? textTex;
     private float lastBakedMult   = float.MinValue;
@@ -47,7 +49,8 @@ public class StackableItemCell : IGuiElementCell
         bool           isBlock,
         int            originalStack,
         ElementBounds  bounds,
-        Func<float>    getMultiplier)
+        Func<float>    getMultiplier,
+        Action<StackableItemCell>? onRightClick = null)
     {
         this.capi          = capi;
         this.stack         = stack;
@@ -55,6 +58,7 @@ public class StackableItemCell : IGuiElementCell
         this.IsBlock       = isBlock;
         this.OriginalStack = originalStack;
         this.getMultiplier = getMultiplier;
+        this.onRightClick  = onRightClick;
         Bounds             = bounds;
     }
 
@@ -66,7 +70,11 @@ public class StackableItemCell : IGuiElementCell
     public void UpdateCellEdit(ICoreClientAPI api, bool editing, int cellIndex) { }
     public void UpdateCellHeight() { }
     public void OnMouseDownOnElement(MouseEvent e, int elementIndex) { }
-    public void OnMouseUpOnElement(MouseEvent e, int elementIndex) { }
+    public void OnMouseUpOnElement(MouseEvent e, int elementIndex)
+    {
+        if (e.Button == EnumMouseButton.Right)
+            onRightClick?.Invoke(this);
+    }
     public void OnMouseMoveOnElement(MouseEvent e, int elementIndex) { }
 
     public void OnRenderInteractiveElements(ICoreClientAPI api, float dt)
@@ -111,21 +119,21 @@ public class StackableItemCell : IGuiElementCell
 
         // ── Item display name (white) ────────────────────────────────────────
         ctx.SelectFontFace("Sans", FontSlant.Normal, FontWeight.Bold);
-        ctx.SetFontSize(13 * capi.Gui.Scale);
+        ctx.SetFontSize(13 * RuntimeEnv.GUIScale);
         ctx.SetSourceRGBA(1, 1, 1, 0.95);
-        ctx.MoveTo(0, 18 * capi.Gui.Scale);
+        ctx.MoveTo(0, 18 * RuntimeEnv.GUIScale);
         ctx.ShowText(TruncateName(stack.GetName(), ctx, texW));
 
         // ── Stack size line ──────────────────────────────────────────────────
         ctx.SelectFontFace("Sans", FontSlant.Normal, FontWeight.Normal);
-        ctx.SetFontSize(12 * capi.Gui.Scale);
+        ctx.SetFontSize(12 * RuntimeEnv.GUIScale);
 
         string baseStr = $"{OriginalStack}";
         string arrowStr = " → ";
         string newStr  = $"{newStack}";
         string ovLabel = HasOverride ? " (override)" : "";
 
-        double y2 = 38 * capi.Gui.Scale;
+        double y2 = 38 * RuntimeEnv.GUIScale;
 
         // Base size in light grey
         ctx.SetSourceRGBA(0.75, 0.75, 0.75, 1);

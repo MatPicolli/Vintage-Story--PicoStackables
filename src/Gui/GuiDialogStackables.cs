@@ -90,7 +90,8 @@ public class GuiDialogStackables : GuiDialog
             var cell = new StackableItemCell(
                 capi, stack, code, isBlock: false,
                 originalStack: origStack, bounds,
-                getMultiplier: () => currentMultiplier);
+                getMultiplier: () => currentMultiplier,
+                onRightClick: OnCellRightClick);
 
             if (data.ItemOverrides.TryGetValue(code, out int ov))
             {
@@ -114,7 +115,8 @@ public class GuiDialogStackables : GuiDialog
             var cell = new StackableItemCell(
                 capi, stack, code, isBlock: true,
                 originalStack: origStack, bounds,
-                getMultiplier: () => currentMultiplier);
+                getMultiplier: () => currentMultiplier,
+                onRightClick: OnCellRightClick);
 
             if (data.BlockOverrides.TryGetValue(code, out int ov))
             {
@@ -199,7 +201,7 @@ public class GuiDialogStackables : GuiDialog
 
                 // Scrollable item list
                 .BeginClip(clipBounds)
-                    .AddCellList(listBounds, OnCellClick, filteredCells, "cellList")
+                    .AddCellList(listBounds, RequireCell, filteredCells, "cellList")
                 .EndClip()
                 .AddVerticalScrollbar(OnScroll, scrollbarBounds, "scrollbar")
 
@@ -242,6 +244,13 @@ public class GuiDialogStackables : GuiDialog
         }
     }
 
+    // Factory delegate required by AddCellList – receives a data item and its
+    // position bounds; we pre-build cells so just return the cell itself.
+    private IGuiElementCell RequireCell(StackableItemCell cell, ElementBounds bounds)
+    {
+        return cell;
+    }
+
     private void OnSearchChanged(string val)
     {
         searchText = val;
@@ -251,7 +260,6 @@ public class GuiDialogStackables : GuiDialog
         if (list == null) return;
 
         list.ReloadCells(filteredCells);
-        SingleComposer!.GetScrollbar("scrollbar")?.ScrollToY(0);
         SyncScrollbar();
     }
 
@@ -260,15 +268,13 @@ public class GuiDialogStackables : GuiDialog
         var list = SingleComposer?.GetCellList<StackableItemCell>("cellList");
         if (list == null) return;
 
-        list.insideBounds.fixedY = -val;
-        list.insideBounds.CalcWorldBounds();
+        list.Bounds.fixedY = -val;
+        list.Bounds.CalcWorldBounds();
     }
 
-    private void OnCellClick(StackableItemCell cell, bool rightClick)
+    // Called by StackableItemCell.OnMouseUpOnElement to toggle overrides.
+    internal void OnCellRightClick(StackableItemCell cell)
     {
-        // Right-click: toggle / clear override. Left-click: no-op (future: open inline editor).
-        if (!rightClick) return;
-
         if (cell.HasOverride)
         {
             cell.HasOverride = false;

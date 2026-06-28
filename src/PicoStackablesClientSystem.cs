@@ -27,11 +27,10 @@ public class PicoStackablesClientSystem : ModSystem
             .SetMessageHandler<StackablesInitPacket>(OnInitReceived)
             .SetMessageHandler<StackablesAckPacket>(OnAckReceived);
 
-        capi.RegisterCommand(
-            "picostackables",
-            "Open the PicoStackables config dialog",
-            "",
-            (groupId, args) => ToggleDialog());
+        capi.ChatCommands
+            .Create("picostackables")
+            .WithDescription("Open the PicoStackables stack size config dialog")
+            .HandleWith(_ => { ToggleDialog(); return TextCommandResult.Success(); });
     }
 
     internal void SendSave(StackablesSavePacket packet) => clientChannel.SendPacket(packet);
