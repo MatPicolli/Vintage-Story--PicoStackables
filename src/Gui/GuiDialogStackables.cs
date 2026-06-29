@@ -154,6 +154,10 @@ public class GuiDialogStackables : GuiDialog
         var font     = CairoFont.WhiteSmallText();
         var detail   = CairoFont.WhiteDetailText();
 
+        // Recomposing (e.g. on a server-pushed refresh) replaces SingleComposer;
+        // dispose the previous one first so its GUI resources aren't leaked.
+        SingleComposer?.Dispose();
+
         SingleComposer = capi.Gui
             .CreateCompo("picostackables", dialogBounds)
             .AddShadedDialogBG(bgBounds, withTitleBar: true)
