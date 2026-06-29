@@ -6,7 +6,7 @@
     <AssemblyName>PicoStackables</AssemblyName>
     <RootNamespace>PicoStackables</RootNamespace>
     <!-- Keep this in sync with the "version" field in modinfo.json -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin/$(Configuration)</OutputPath>
 
