@@ -110,15 +110,41 @@ public class PicoStackablesModSystem : ModSystem
 
         foreach (var item in worldApi.World.Items)
         {
-            if (item?.Code == null) continue;
+            if (!ShouldManage(item)) continue;
             originalItemStacks[item.Code.ToString()] = item.MaxStackSize;
         }
 
         foreach (var block in worldApi.World.Blocks)
         {
-            if (block?.Code == null) continue;
+            if (!ShouldManage(block)) continue;
             originalBlockStacks[block.Code.ToString()] = block.MaxStackSize;
         }
+    }
+
+    /// <summary>
+    /// Whether this collectible's stack size should be managed by the mod.
+    /// Excludes things players never freely stack in their inventory so they
+    /// neither get rescaled nor clutter the config dialog.
+    /// </summary>
+    private static bool ShouldManage(CollectibleObject obj)
+    {
+        if (obj?.Code == null) return false;
+
+        // Leave unstackable items unstackable: tools, weapons and armour have a
+        // vanilla stack size of 1 (and/or durability). Multiplying that would
+        // wrongly turn a single non-stackable item into a stack.
+        if (obj.MaxStackSize <= 1) return false;
+        if (obj.Durability    > 1) return false;
+
+        // Internal / non-collectible placeholders players never carry:
+        //   game:air / game:item-air – empty-slot placeholder
+        //   game:creature-*          – the creative "spawn creature" items
+        //                              (traders, wildlife, monsters, tamed animals…)
+        string path = obj.Code.Path;
+        if (path == "air" || path == "item-air") return false;
+        if (path.StartsWith("creature", StringComparison.Ordinal)) return false;
+
+        return true;
     }
 
     private void ApplyConfig(ICoreAPI worldApi)
