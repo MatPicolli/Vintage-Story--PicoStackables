@@ -26,12 +26,11 @@ public class StackableItem
 
     private readonly ICoreClientAPI capi;
     private readonly ItemStack      stack;
-    private readonly Func<float>    getMultiplier;
+    private readonly Func<int, int> computeBase;   // vanilla original -> mode-aware base (no override)
 
     private LoadedTexture? textTex;
-    private float lastMult     = float.MinValue;
+    private int   lastNewStack = int.MinValue;
     private bool  lastHasOvr;
-    private int   lastOvrVal;
     private bool  lastSelected;
     private int   lastTexW;
 
@@ -45,22 +44,22 @@ public class StackableItem
         string         code,
         bool           isBlock,
         int            originalStack,
-        Func<float>    getMultiplier)
+        Func<int, int> computeBase)
     {
         this.capi          = capi;
         this.stack         = stack;
         this.Code          = code;
         this.IsBlock       = isBlock;
         this.OriginalStack = originalStack;
-        this.getMultiplier = getMultiplier;
+        this.computeBase   = computeBase;
 
         DisplayName = stack.GetName() ?? code;
         SearchKey   = (code + " " + DisplayName).ToLowerInvariant();
     }
 
-    public int ComputeStack(float mult) => HasOverride
+    public int ComputeStack() => HasOverride
         ? Math.Max(1, OverrideValue)
-        : Math.Max(1, (int)Math.Round(OriginalStack * mult));
+        : computeBase(OriginalStack);
 
     public void Render(ICoreClientAPI api, double x, double y, double colWidth, double rowHeight)
     {
@@ -79,9 +78,9 @@ public class StackableItem
         int texW = Math.Max(1, (int)(colWidth - TextOffX - IconPad));
         int texH = Math.Max(1, (int)rowHeight);
 
-        float mult = getMultiplier();
-        if (NeedsRebake(mult, texW))
-            Bake(mult, texW, texH);
+        int newStack = ComputeStack();
+        if (NeedsRebake(newStack, texW))
+            Bake(newStack, texW, texH);
 
         if (textTex != null && textTex.TextureId > 0)
         {
@@ -94,26 +93,22 @@ public class StackableItem
         }
     }
 
-    private bool NeedsRebake(float mult, int texW)
+    private bool NeedsRebake(int newStack, int texW)
     {
         if (textTex == null) return true;
         if (texW != lastTexW) return true;
         if (lastSelected != Selected) return true;
-        if (lastHasOvr != HasOverride) return true;
-        if (HasOverride && lastOvrVal != OverrideValue) return true;
-        if (!HasOverride && Math.Abs(mult - lastMult) > 0.0001f) return true;
+        if (lastHasOvr != HasOverride) return true;   // colour depends on override state
+        if (lastNewStack != newStack) return true;
         return false;
     }
 
-    private void Bake(float mult, int texW, int texH)
+    private void Bake(int newStack, int texW, int texH)
     {
-        lastMult     = mult;
+        lastNewStack = newStack;
         lastHasOvr   = HasOverride;
-        lastOvrVal   = OverrideValue;
         lastSelected = Selected;
         lastTexW     = texW;
-
-        int newStack = ComputeStack(mult);
 
         using var surface = new ImageSurface(Format.Argb32, texW, texH);
         using var ctx     = new Context(surface);

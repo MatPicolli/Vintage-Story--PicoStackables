@@ -5,14 +5,19 @@ A Vintage Story 1.22.3 mod that multiplies item and block stack sizes, with a ri
 ## Features
 
 - **Global multiplier** – scales every item/block stack size by a configurable factor (default ×2).
-- **Per-item/block overrides** – set an absolute stack size for specific items or blocks; the global multiplier is bypassed for them.
+- **Flat size mode** – instead of multiplying, set *every* item/block to one fixed stack size (e.g. 500 or 1000). Toggle it in the dialog or via `UseFlatSize` in the config.
+- **Prevent item loss** – a safety toggle (on by default) that stops the mod from ever setting a stack size *below* the vanilla value, so lowering the multiplier or a small flat size can't truncate and destroy existing oversized stacks.
+- **Per-item/block overrides** – set an absolute stack size for specific items or blocks; the global multiplier / flat size is bypassed for them.
 - **In-game config dialog** – `/picostackables` opens a searchable list of all items and blocks showing:
   - Item icon
   - Display name
-  - `16 → 32` preview (new value in green, updates live as you adjust the multiplier)
+  - `16 → 32` preview (new value in green, updates live as you adjust the settings)
   - Override values shown in yellow
-- **Live multiplier preview** – changing the multiplier input instantly updates all visible stack previews without saving or reloading.
+- **Live preview** – changing the multiplier, flat size or toggles instantly updates all visible stack previews without saving or reloading.
+- **Unsaved-changes indicator** – the dialog shows whether your current settings are applied, so a preview is never mistaken for a saved change.
 - **Right-click an item** in the dialog to toggle a per-item override.
+- **Multiplayer-aware** – stack sizes apply on both server and connected clients. Only operators with the `controlserver` privilege can save changes.
+- **Smart filtering** – tools/durability items, creature & NPC spawn entries, and internal placeholders (like `item-air`) are left untouched and hidden from the list.
 
 ## Dialog
 
@@ -50,6 +55,9 @@ Package `bin/Release/PicoStackables.dll` together with `modinfo.json` into a `.z
 ```json
 {
   "GlobalMultiplier": 2.0,
+  "UseFlatSize": false,
+  "FlatStackSize": 100,
+  "PreventShrinking": true,
   "ItemOverrides": {
     "game:stick": 128
   },
@@ -59,8 +67,11 @@ Package `bin/Release/PicoStackables.dll` together with `modinfo.json` into a `.z
 
 | Field | Default | Description |
 |---|---|---|
-| `GlobalMultiplier` | `2.0` | Multiply all stack sizes by this factor. |
-| `ItemOverrides` | `{}` | `"item-code": absoluteStackSize` — bypasses the global multiplier. |
+| `GlobalMultiplier` | `2.0` | Multiply all stack sizes by this factor (ignored when `UseFlatSize` is true). |
+| `UseFlatSize` | `false` | When true, set every managed item/block to `FlatStackSize` instead of multiplying. |
+| `FlatStackSize` | `100` | The absolute stack size used when `UseFlatSize` is true. |
+| `PreventShrinking` | `true` | Never set a stack size below its vanilla value, preventing item loss from truncated stacks. Overrides bypass this. |
+| `ItemOverrides` | `{}` | `"item-code": absoluteStackSize` — bypasses the multiplier/flat size. |
 | `BlockOverrides` | `{}` | Same, but for blocks. |
 
 ## Permissions

@@ -6,7 +6,7 @@
     <AssemblyName>PicoStackables</AssemblyName>
     <RootNamespace>PicoStackables</RootNamespace>
     <!-- Keep this in sync with the "version" field in modinfo.json -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin/$(Configuration)</OutputPath>
 
@@ -15,8 +15,14 @@
       tries to load this assembly a second time when you re-enter a world, throwing
       "Assembly with same name is already loaded". Disable its generation and the
       debug symbols so the build output is just the bare DLL.
+
+      ProduceReferenceAssembly must also be off: the SDK otherwise emits a second
+      copy at bin/<Config>/ref/PicoStackables.dll. If the bin folder is deployed
+      to Mods, the loader finds both DLLs (same assembly name) and throws the very
+      same "Assembly with same name is already loaded" error.
     -->
     <GenerateDependencyFile>false</GenerateDependencyFile>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
 

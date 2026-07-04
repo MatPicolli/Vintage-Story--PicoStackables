@@ -67,6 +67,9 @@ public class PicoStackablesModSystem : ModSystem
         config.GlobalMultiplier = Math.Max(0.01f, packet.GlobalMultiplier);
         config.ItemOverrides    = packet.ItemOverrides  ?? new();
         config.BlockOverrides   = packet.BlockOverrides ?? new();
+        config.UseFlatSize      = packet.UseFlatSize;
+        config.FlatStackSize    = Math.Max(1, packet.FlatStackSize);
+        config.PreventShrinking = packet.PreventShrinking;
 
         api.StoreModConfig(config, ConfigFilename);
         ApplyConfig(api);
@@ -97,6 +100,9 @@ public class PicoStackablesModSystem : ModSystem
         BlockOverrides      = new Dictionary<string, int>(config.BlockOverrides),
         OriginalItemStacks  = new Dictionary<string, int>(originalItemStacks),
         OriginalBlockStacks = new Dictionary<string, int>(originalBlockStacks),
+        UseFlatSize         = config.UseFlatSize,
+        FlatStackSize       = config.FlatStackSize,
+        PreventShrinking    = config.PreventShrinking,
     };
 
     // -------------------------------------------------------------------------
@@ -155,24 +161,24 @@ public class PicoStackablesModSystem : ModSystem
         {
             if (item?.Code == null) continue;
             string code = item.Code.ToString();
+            if (!originalItemStacks.TryGetValue(code, out int orig)) continue; // unmanaged
 
-            item.MaxStackSize = config.ItemOverrides.TryGetValue(code, out int ov)
-                ? Math.Max(1, ov)
-                : originalItemStacks.TryGetValue(code, out int orig)
-                    ? Math.Max(1, (int)Math.Round(orig * mult))
-                    : item.MaxStackSize;
+            bool hasOv = config.ItemOverrides.TryGetValue(code, out int ov);
+            item.MaxStackSize = StackSizeCalc.Final(
+                orig, hasOv, ov,
+                config.UseFlatSize, config.FlatStackSize, mult, config.PreventShrinking);
         }
 
         foreach (var block in worldApi.World.Blocks)
         {
             if (block?.Code == null) continue;
             string code = block.Code.ToString();
+            if (!originalBlockStacks.TryGetValue(code, out int orig)) continue; // unmanaged
 
-            block.MaxStackSize = config.BlockOverrides.TryGetValue(code, out int ov)
-                ? Math.Max(1, ov)
-                : originalBlockStacks.TryGetValue(code, out int orig)
-                    ? Math.Max(1, (int)Math.Round(orig * mult))
-                    : block.MaxStackSize;
+            bool hasOv = config.BlockOverrides.TryGetValue(code, out int ov);
+            block.MaxStackSize = StackSizeCalc.Final(
+                orig, hasOv, ov,
+                config.UseFlatSize, config.FlatStackSize, mult, config.PreventShrinking);
         }
     }
 }
