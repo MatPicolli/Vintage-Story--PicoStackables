@@ -36,14 +36,15 @@ public class GuiDialogStackables : GuiDialog
     private string searchText        = "";
     private long   searchDebounceId  = -1;
     private bool   dirty;
+    private bool   confirmingClose;
 
     private ElementBounds clipBounds = null!;
     private ElementBounds listBounds = null!;
 
     // Layout (unscaled)
     private const int    Columns   = 3;
-    private const double DialogW   = 760;
-    private const double DialogH   = 600;
+    private const double DialogW   = 820;
+    private const double DialogH   = 648;
     private const double Pad       = 16;
     private const double TopOffset = 32;   // clears the title bar
     private const double RowH      = 30;
@@ -137,14 +138,18 @@ public class GuiDialogStackables : GuiDialog
 
         double y = TopOffset + Pad;
 
-        // Row 1: how the stack size is computed – multiplier OR flat size, plus the safety guard.
-        var multLabel    = ElementBounds.Fixed(Pad,       y, 150, RowH);
-        var multInput    = ElementBounds.Fixed(Pad + 150, y,  60, RowH);
-        var flatSwitch   = ElementBounds.Fixed(Pad + 225, y,  30, RowH);
-        var flatLabel    = ElementBounds.Fixed(Pad + 258, y,  75, RowH);
-        var flatInput    = ElementBounds.Fixed(Pad + 335, y,  60, RowH);
-        var shrinkSwitch = ElementBounds.Fixed(Pad + 410, y,  30, RowH);
-        var shrinkLabel  = ElementBounds.Fixed(Pad + 443, y, 180, RowH);
+        // Row 1: the two possible stack-size values (only one is active at a time).
+        var multLabel = ElementBounds.Fixed(Pad,       y, 110, RowH);
+        var multInput = ElementBounds.Fixed(Pad + 120, y,  70, RowH);
+        var flatLabel = ElementBounds.Fixed(Pad + 210, y,  90, RowH);
+        var flatInput = ElementBounds.Fixed(Pad + 305, y,  70, RowH);
+        y += RowH + 8;
+
+        // Row 2: mode switch (multiplier vs flat) + the item-loss safety guard.
+        var flatSwitch   = ElementBounds.Fixed(Pad,       y, 30, RowH);
+        var modeLabel    = ElementBounds.Fixed(Pad + 38,  y, 300, RowH);
+        var shrinkSwitch = ElementBounds.Fixed(Pad + 360, y, 30, RowH);
+        var shrinkLabel  = ElementBounds.Fixed(Pad + 398, y, 260, RowH);
         y += RowH + 8;
 
         var searchLabel = ElementBounds.Fixed(Pad, y, 70, RowH);
@@ -152,11 +157,11 @@ public class GuiDialogStackables : GuiDialog
         y += RowH + 8;
 
         // Override editor row
-        var selLabel  = ElementBounds.Fixed(Pad, y, 320, RowH);
-        var ovLabel   = ElementBounds.Fixed(Pad + 330, y, 90, RowH);
-        var ovInput   = ElementBounds.Fixed(Pad + 420, y, 70, RowH);
-        var setBtn    = ElementBounds.Fixed(Pad + 495, y, 80, RowH);
-        var clearBtn  = ElementBounds.Fixed(Pad + 580, y, 110, RowH);
+        var selLabel  = ElementBounds.Fixed(Pad, y, 300, RowH);
+        var ovLabel   = ElementBounds.Fixed(Pad + 310, y, 60, RowH);
+        var ovInput   = ElementBounds.Fixed(Pad + 372, y, 70, RowH);
+        var setBtn    = ElementBounds.Fixed(Pad + 448, y, 70, RowH);
+        var clearBtn  = ElementBounds.Fixed(Pad + 522, y, 120, RowH);
         y += RowH + 10;
 
         clipBounds = ElementBounds.Fixed(Pad, y, ListW, ListH);
@@ -179,21 +184,29 @@ public class GuiDialogStackables : GuiDialog
         SingleComposer = capi.Gui
             .CreateCompo("picostackables", dialogBounds)
             .AddShadedDialogBG(bgBounds, withTitleBar: true)
-            .AddDialogTitleBar("PicoStackables – Stack Sizes", () => TryClose())
+            .AddDialogTitleBar("PicoStackables – Stack Sizes", () => RequestClose())
             .BeginChildElements(bgBounds)
 
-                .AddStaticText("Multiplier:", font, multLabel)
+                // Row 1 – the two possible values
+                .AddStaticText("Multiplier ×", font, multLabel)
+                .AddHoverText("Multiplies every item/block's vanilla stack size. Ignored while Flat size mode is on.", font, 260, multLabel)
                 .AddNumberInput(multInput, OnMultiplierChanged, detail, "multInput")
-                .AddSwitch(OnFlatToggled, flatSwitch, "flatSwitch")
-                .AddStaticText("Flat size", font, flatLabel)
+                .AddStaticText("Flat size =", font, flatLabel)
+                .AddHoverText("When Flat size mode is on, every managed item/block is set to exactly this number.", font, 260, flatLabel)
                 .AddNumberInput(flatInput, OnFlatChanged, detail, "flatInput")
+
+                // Row 2 – mode switch + safety guard
+                .AddSwitch(OnFlatToggled, flatSwitch, "flatSwitch")
+                .AddDynamicText("", font, modeLabel, "modeLabel")
+                .AddHoverText("Off = scale stacks by the multiplier.  On = set every stack to the flat size.", font, 260, modeLabel)
                 .AddSwitch(OnShrinkToggled, shrinkSwitch, "shrinkSwitch")
                 .AddStaticText("Prevent item loss", font, shrinkLabel)
+                .AddHoverText("Never sets a stack size below its vanilla value, so a lower multiplier or a small flat size can't delete items from existing oversized stacks. Recommended.", font, 280, shrinkLabel)
 
                 .AddStaticText("Search:", font, searchLabel)
                 .AddTextInput(searchInput, OnSearchChanged, detail, "searchInput")
 
-                .AddDynamicText("Click an item to edit its stack size", font, selLabel, "selLabel")
+                .AddDynamicText("Left-click an item to edit it  ·  right-click to quick-toggle an override", font, selLabel, "selLabel")
                 .AddStaticText("Set to:", font, ovLabel)
                 .AddNumberInput(ovInput, _ => { }, detail, "ovInput")
                 .AddSmallButton("Apply", OnApplyOverride, setBtn)
@@ -205,8 +218,8 @@ public class GuiDialogStackables : GuiDialog
                 .AddVerticalScrollbar(OnScroll, scrollBounds, "scrollbar")
 
                 .AddDynamicText("", font, statusLabel, "statusLabel")
-                .AddSmallButton("Save",  OnSave,    saveBtn)
-                .AddSmallButton("Close", () => { TryClose(); return true; }, closeBtn)
+                .AddSmallButton("Save",  OnSave,        saveBtn)
+                .AddSmallButton("Close", RequestClose,  closeBtn)
 
             .EndChildElements()
             .Compose();
@@ -222,7 +235,9 @@ public class GuiDialogStackables : GuiDialog
         // We just loaded values straight from the server, so nothing is unsaved yet.
         // (SetValue above may fire change handlers; clear the flag afterwards.)
         dirty = false;
+        confirmingClose = false;
         UpdateStatusLabel();
+        UpdateModeLabel();
 
         SyncScrollbar();
     }
@@ -250,6 +265,7 @@ public class GuiDialogStackables : GuiDialog
     {
         if (float.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out float f))
             currentMultiplier = Math.Max(0.01f, f);
+        UpdateModeLabel();
         MarkDirty();
         // Visible cells re-bake automatically via their ComputeBase closure.
     }
@@ -257,6 +273,7 @@ public class GuiDialogStackables : GuiDialog
     private void OnFlatToggled(bool on)
     {
         useFlat = on;
+        UpdateModeLabel();
         MarkDirty();
     }
 
@@ -264,6 +281,7 @@ public class GuiDialogStackables : GuiDialog
     {
         if (int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) && v > 0)
             flatValue = v;
+        UpdateModeLabel();
         MarkDirty();
     }
 
@@ -273,9 +291,35 @@ public class GuiDialogStackables : GuiDialog
         MarkDirty();
     }
 
+    // Shows which mode is currently in effect (and its value), so it's clear that
+    // the other input is being ignored — friendlier than silently having two live fields.
+    private void UpdateModeLabel()
+    {
+        SingleComposer?.GetDynamicText("modeLabel")?.SetNewText(
+            useFlat
+                ? $"» Flat size active — every stack = {flatValue}"
+                : $"» Multiplier active — ×{currentMultiplier.ToString("0.##", CultureInfo.InvariantCulture)}");
+    }
+
+    // Guards against losing edits: the first Close with unsaved changes arms a
+    // confirmation instead of closing; a second Close (or Save first) goes through.
+    private bool RequestClose()
+    {
+        if (dirty && !confirmingClose)
+        {
+            confirmingClose = true;
+            SingleComposer?.GetDynamicText("statusLabel")?.SetNewText(
+                "● Unsaved changes — click Close again to discard, or Save to keep them.");
+            return false;
+        }
+        TryClose();
+        return true;
+    }
+
     private void MarkDirty()
     {
         dirty = true;
+        confirmingClose = false;   // any fresh edit cancels a pending close-confirm
         UpdateStatusLabel();
     }
 
@@ -389,6 +433,7 @@ public class GuiDialogStackables : GuiDialog
         });
 
         dirty = false;
+        confirmingClose = false;
         UpdateStatusLabel();
         return true;
     }
