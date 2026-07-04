@@ -59,22 +59,24 @@ public class PicoStackablesClientSystem : ModSystem
         {
             if (item?.Code == null) continue;
             string code = item.Code.ToString();
+            if (!data.OriginalItemStacks.TryGetValue(code, out int orig)) continue;
 
-            if (data.ItemOverrides.TryGetValue(code, out int ov))
-                item.MaxStackSize = Math.Max(1, ov);
-            else if (data.OriginalItemStacks.TryGetValue(code, out int orig))
-                item.MaxStackSize = Math.Max(1, (int)Math.Round(orig * mult));
+            bool hasOv = data.ItemOverrides.TryGetValue(code, out int ov);
+            item.MaxStackSize = StackSizeCalc.Final(
+                orig, hasOv, ov,
+                data.UseFlatSize, data.FlatStackSize, mult, data.PreventShrinking);
         }
 
         foreach (var block in capi.World.Blocks)
         {
             if (block?.Code == null) continue;
             string code = block.Code.ToString();
+            if (!data.OriginalBlockStacks.TryGetValue(code, out int orig)) continue;
 
-            if (data.BlockOverrides.TryGetValue(code, out int ov))
-                block.MaxStackSize = Math.Max(1, ov);
-            else if (data.OriginalBlockStacks.TryGetValue(code, out int orig))
-                block.MaxStackSize = Math.Max(1, (int)Math.Round(orig * mult));
+            bool hasOv = data.BlockOverrides.TryGetValue(code, out int ov);
+            block.MaxStackSize = StackSizeCalc.Final(
+                orig, hasOv, ov,
+                data.UseFlatSize, data.FlatStackSize, mult, data.PreventShrinking);
         }
     }
 

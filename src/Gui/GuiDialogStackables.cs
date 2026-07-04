@@ -11,10 +11,11 @@ namespace PicoStackables.Gui;
 /// <summary>
 /// In-game config dialog for PicoStackables.
 ///
-/// Top: global multiplier input + search box + a per-item override editor.
+/// Top: multiplier input, a "flat size" toggle + value, a "prevent item loss"
+///      safety toggle, a search box and a per-item override editor.
 /// Middle: a multi-column, scrollable grid of every item/block showing
 ///         "original → new" with the new value in green (yellow for overrides).
-/// Bottom: Save / Close.
+/// Bottom: an unsaved-changes indicator + Save / Close.
 /// </summary>
 public class GuiDialogStackables : GuiDialog
 {
@@ -29,8 +30,12 @@ public class GuiDialogStackables : GuiDialog
     private StackableItem? selected;
 
     private float  currentMultiplier = 2f;
+    private bool   useFlat;
+    private int    flatValue         = 100;
+    private bool   preventShrinking   = true;
     private string searchText        = "";
     private long   searchDebounceId  = -1;
+    private bool   dirty;
 
     private ElementBounds clipBounds = null!;
     private ElementBounds listBounds = null!;
@@ -69,6 +74,9 @@ public class GuiDialogStackables : GuiDialog
     private void BuildItems(StackablesInitPacket data)
     {
         currentMultiplier = data.GlobalMultiplier;
+        useFlat           = data.UseFlatSize;
+        flatValue         = Math.Max(1, data.FlatStackSize);
+        preventShrinking  = data.PreventShrinking;
 
         foreach (var it in allItems) it.Dispose();
         allItems.Clear();
@@ -78,8 +86,7 @@ public class GuiDialogStackables : GuiDialog
         {
             var item = capi.World.GetItem(new AssetLocation(code));
             if (item == null) continue;
-            var si = new StackableItem(capi, new ItemStack(item), code, false, orig,
-                                       () => currentMultiplier);
+            var si = new StackableItem(capi, new ItemStack(item), code, false, orig, ComputeBase);
             if (data.ItemOverrides.TryGetValue(code, out int ov)) { si.HasOverride = true; si.OverrideValue = ov; }
             allItems.Add(si);
         }
@@ -89,14 +96,18 @@ public class GuiDialogStackables : GuiDialog
             if (orig <= 0) continue;
             var block = capi.World.GetBlock(new AssetLocation(code));
             if (block == null) continue;
-            var si = new StackableItem(capi, new ItemStack(block), code, true, orig,
-                                       () => currentMultiplier);
+            var si = new StackableItem(capi, new ItemStack(block), code, true, orig, ComputeBase);
             if (data.BlockOverrides.TryGetValue(code, out int ov)) { si.HasOverride = true; si.OverrideValue = ov; }
             allItems.Add(si);
         }
 
         RebuildRows();
     }
+
+    // Mode-aware base stack size (before any per-item override), shared by every
+    // preview cell so they update live as the multiplier / flat / safety toggles change.
+    private int ComputeBase(int original)
+        => StackSizeCalc.Base(original, useFlat, flatValue, currentMultiplier, preventShrinking);
 
     private void RebuildRows()
     {
@@ -126,8 +137,14 @@ public class GuiDialogStackables : GuiDialog
 
         double y = TopOffset + Pad;
 
-        var multLabel = ElementBounds.Fixed(Pad, y, 210, RowH);
-        var multInput = ElementBounds.Fixed(Pad + 215, y, 90, RowH);
+        // Row 1: how the stack size is computed – multiplier OR flat size, plus the safety guard.
+        var multLabel    = ElementBounds.Fixed(Pad,       y, 150, RowH);
+        var multInput    = ElementBounds.Fixed(Pad + 150, y,  60, RowH);
+        var flatSwitch   = ElementBounds.Fixed(Pad + 225, y,  30, RowH);
+        var flatLabel    = ElementBounds.Fixed(Pad + 258, y,  75, RowH);
+        var flatInput    = ElementBounds.Fixed(Pad + 335, y,  60, RowH);
+        var shrinkSwitch = ElementBounds.Fixed(Pad + 410, y,  30, RowH);
+        var shrinkLabel  = ElementBounds.Fixed(Pad + 443, y, 180, RowH);
         y += RowH + 8;
 
         var searchLabel = ElementBounds.Fixed(Pad, y, 70, RowH);
@@ -148,8 +165,9 @@ public class GuiDialogStackables : GuiDialog
         var scrollBounds = ElementStdBounds.VerticalScrollbar(clipBounds);
         y += ListH + 12;
 
-        var saveBtn  = ElementBounds.Fixed(DialogW - Pad - 200, y, 90, 32);
-        var closeBtn = ElementBounds.Fixed(DialogW - Pad - 100, y, 90, 32);
+        var statusLabel = ElementBounds.Fixed(Pad, y + 6, DialogW - Pad * 3 - 200, RowH);
+        var saveBtn     = ElementBounds.Fixed(DialogW - Pad - 200, y, 90, 32);
+        var closeBtn    = ElementBounds.Fixed(DialogW - Pad - 100, y, 90, 32);
 
         var font     = CairoFont.WhiteSmallText();
         var detail   = CairoFont.WhiteDetailText();
@@ -164,8 +182,13 @@ public class GuiDialogStackables : GuiDialog
             .AddDialogTitleBar("PicoStackables – Stack Sizes", () => TryClose())
             .BeginChildElements(bgBounds)
 
-                .AddStaticText("Global Stack Multiplier:", font, multLabel)
+                .AddStaticText("Multiplier:", font, multLabel)
                 .AddNumberInput(multInput, OnMultiplierChanged, detail, "multInput")
+                .AddSwitch(OnFlatToggled, flatSwitch, "flatSwitch")
+                .AddStaticText("Flat size", font, flatLabel)
+                .AddNumberInput(flatInput, OnFlatChanged, detail, "flatInput")
+                .AddSwitch(OnShrinkToggled, shrinkSwitch, "shrinkSwitch")
+                .AddStaticText("Prevent item loss", font, shrinkLabel)
 
                 .AddStaticText("Search:", font, searchLabel)
                 .AddTextInput(searchInput, OnSearchChanged, detail, "searchInput")
@@ -174,13 +197,14 @@ public class GuiDialogStackables : GuiDialog
                 .AddStaticText("Set to:", font, ovLabel)
                 .AddNumberInput(ovInput, _ => { }, detail, "ovInput")
                 .AddSmallButton("Apply", OnApplyOverride, setBtn)
-                .AddSmallButton("Use multiplier", OnClearOverride, clearBtn)
+                .AddSmallButton("Clear override", OnClearOverride, clearBtn)
 
                 .BeginClip(clipBounds)
                     .AddCellList(listBounds, RequireCell, rowCells, "cellList")
                 .EndClip()
                 .AddVerticalScrollbar(OnScroll, scrollBounds, "scrollbar")
 
+                .AddDynamicText("", font, statusLabel, "statusLabel")
                 .AddSmallButton("Save",  OnSave,    saveBtn)
                 .AddSmallButton("Close", () => { TryClose(); return true; }, closeBtn)
 
@@ -188,9 +212,17 @@ public class GuiDialogStackables : GuiDialog
             .Compose();
 
         SingleComposer.GetNumberInput("multInput").SetValue(currentMultiplier.ToString("0.##", CultureInfo.InvariantCulture));
+        SingleComposer.GetNumberInput("flatInput").SetValue(flatValue.ToString(CultureInfo.InvariantCulture));
+        SingleComposer.GetSwitch("flatSwitch").SetValue(useFlat);
+        SingleComposer.GetSwitch("shrinkSwitch").SetValue(preventShrinking);
         SingleComposer.GetTextInput("searchInput").SetPlaceHolderText("item code or name…");
         if (!string.IsNullOrEmpty(searchText))
             SingleComposer.GetTextInput("searchInput").SetValue(searchText);
+
+        // We just loaded values straight from the server, so nothing is unsaved yet.
+        // (SetValue above may fire change handlers; clear the flag afterwards.)
+        dirty = false;
+        UpdateStatusLabel();
 
         SyncScrollbar();
     }
@@ -218,7 +250,41 @@ public class GuiDialogStackables : GuiDialog
     {
         if (float.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out float f))
             currentMultiplier = Math.Max(0.01f, f);
-        // Visible cells re-bake automatically via their getMultiplier closure.
+        MarkDirty();
+        // Visible cells re-bake automatically via their ComputeBase closure.
+    }
+
+    private void OnFlatToggled(bool on)
+    {
+        useFlat = on;
+        MarkDirty();
+    }
+
+    private void OnFlatChanged(string val)
+    {
+        if (int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) && v > 0)
+            flatValue = v;
+        MarkDirty();
+    }
+
+    private void OnShrinkToggled(bool on)
+    {
+        preventShrinking = on;
+        MarkDirty();
+    }
+
+    private void MarkDirty()
+    {
+        dirty = true;
+        UpdateStatusLabel();
+    }
+
+    private void UpdateStatusLabel()
+    {
+        SingleComposer?.GetDynamicText("statusLabel")?.SetNewText(
+            dirty
+                ? "● Unsaved changes – click Save to apply them in-world"
+                : "✓ Settings are saved and applied");
     }
 
     private void OnSearchChanged(string val)
@@ -258,7 +324,8 @@ public class GuiDialogStackables : GuiDialog
         {
             // Quick toggle override on/off
             if (item.HasOverride) item.HasOverride = false;
-            else { item.HasOverride = true; item.OverrideValue = item.ComputeStack(currentMultiplier); }
+            else { item.HasOverride = true; item.OverrideValue = item.ComputeStack(); }
+            MarkDirty();
             if (item == selected) LoadSelectionIntoEditor();
             return;
         }
@@ -274,7 +341,7 @@ public class GuiDialogStackables : GuiDialog
         if (selected == null) return;
         SingleComposer.GetDynamicText("selLabel")
             .SetNewText($"{selected.DisplayName}  ({selected.Code})");
-        int val = selected.HasOverride ? selected.OverrideValue : selected.ComputeStack(currentMultiplier);
+        int val = selected.ComputeStack();
         SingleComposer.GetNumberInput("ovInput").SetValue(val.ToString());
     }
 
@@ -286,6 +353,7 @@ public class GuiDialogStackables : GuiDialog
         {
             selected.HasOverride  = true;
             selected.OverrideValue = v;
+            MarkDirty();
         }
         return true;
     }
@@ -294,6 +362,7 @@ public class GuiDialogStackables : GuiDialog
     {
         if (selected == null) return true;
         selected.HasOverride = false;
+        MarkDirty();
         LoadSelectionIntoEditor();
         return true;
     }
@@ -314,7 +383,13 @@ public class GuiDialogStackables : GuiDialog
             GlobalMultiplier = currentMultiplier,
             ItemOverrides    = itemOvr,
             BlockOverrides   = blockOvr,
+            UseFlatSize      = useFlat,
+            FlatStackSize    = flatValue,
+            PreventShrinking = preventShrinking,
         });
+
+        dirty = false;
+        UpdateStatusLabel();
         return true;
     }
 

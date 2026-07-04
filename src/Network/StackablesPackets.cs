@@ -23,6 +23,9 @@ public class StackablesInitPacket
     // Original (vanilla) values before any mod multiplication
     [ProtoMember(4)] public Dictionary<string, int> OriginalItemStacks  { get; set; } = new();
     [ProtoMember(5)] public Dictionary<string, int> OriginalBlockStacks { get; set; } = new();
+    [ProtoMember(6)] public bool UseFlatSize      { get; set; }
+    [ProtoMember(7)] public int  FlatStackSize    { get; set; }
+    [ProtoMember(8)] public bool PreventShrinking { get; set; }
 }
 
 /// <summary>
@@ -34,6 +37,9 @@ public class StackablesSavePacket
     [ProtoMember(1)] public float GlobalMultiplier { get; set; }
     [ProtoMember(2)] public Dictionary<string, int> ItemOverrides  { get; set; } = new();
     [ProtoMember(3)] public Dictionary<string, int> BlockOverrides { get; set; } = new();
+    [ProtoMember(4)] public bool UseFlatSize      { get; set; }
+    [ProtoMember(5)] public int  FlatStackSize    { get; set; }
+    [ProtoMember(6)] public bool PreventShrinking { get; set; }
 }
 
 /// <summary>
