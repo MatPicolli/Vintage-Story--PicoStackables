@@ -8,7 +8,7 @@ A Vintage Story 1.22.3 mod that multiplies item and block stack sizes, with a ri
 - **Flat size mode** – instead of multiplying, set *every* item/block to one fixed stack size (e.g. 500 or 1000). Toggle it in the dialog or via `UseFlatSize` in the config.
 - **Prevent item loss** – a safety toggle (on by default) that stops the mod from ever setting a stack size *below* the vanilla value, so lowering the multiplier or a small flat size can't truncate and destroy existing oversized stacks.
 - **Per-item/block overrides** – set an absolute stack size for specific items or blocks; the global multiplier / flat size is bypassed for them.
-- **In-game config dialog** – `/picostackables` opens a searchable list of all items and blocks showing:
+- **In-game config dialog** – `.picostackables` opens a searchable list of all items and blocks showing:
   - Item icon
   - Display name
   - `16 → 32` preview (new value in green, updates live as you adjust the settings)

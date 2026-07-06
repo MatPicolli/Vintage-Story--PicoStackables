@@ -19,6 +19,17 @@ public class PicoStackablesModSystem : ModSystem
     private readonly Dictionary<string, int> originalItemStacks  = new();
     private readonly Dictionary<string, int> originalBlockStacks = new();
     private bool originalsRecorded;
+    private bool configLoaded;
+
+    /// <summary>
+    /// Collectibles (by code path) that are managed even though the normal
+    /// exclusion rules would drop them — e.g. items with a vanilla stack size of
+    /// 1 that players still want to be able to stack.
+    /// </summary>
+    private static readonly HashSet<string> ForceManagePaths = new(StringComparer.Ordinal)
+    {
+        "gear-temporal",   // Temporal gear — vanilla stack size 1, opted in on request
+    };
 
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
 
@@ -27,7 +38,7 @@ public class PicoStackablesModSystem : ModSystem
         this.api  = sapi;
         this.sapi = sapi;
 
-        LoadConfig();
+        EnsureConfigLoaded();
 
         serverChannel = sapi.Network
             .RegisterChannel(Channel.Name)
@@ -41,6 +52,13 @@ public class PicoStackablesModSystem : ModSystem
 
     public override void AssetsFinalize(ICoreAPI api)
     {
+        // AssetsFinalize can run before StartServerSide in the mod lifecycle, so
+        // make sure the saved config is loaded here before we apply it — otherwise
+        // a fresh world would come up with default stack sizes until the player
+        // re-saved from the dialog.
+        this.api ??= api;
+        EnsureConfigLoaded();
+
         RecordOriginals(api);
         ApplyConfig(api);
     }
@@ -87,10 +105,12 @@ public class PicoStackablesModSystem : ModSystem
     // Config helpers
     // -------------------------------------------------------------------------
 
-    private void LoadConfig()
+    private void EnsureConfigLoaded()
     {
+        if (configLoaded) return;
         config = api.LoadModConfig<PicoStackablesConfig>(ConfigFilename) ?? new();
         api.StoreModConfig(config, ConfigFilename);
+        configLoaded = true;
     }
 
     private StackablesInitPacket BuildInitPacket() => new()
@@ -135,6 +155,9 @@ public class PicoStackablesModSystem : ModSystem
     private static bool ShouldManage(CollectibleObject obj)
     {
         if (obj?.Code == null) return false;
+
+        // Explicit opt-ins win over every exclusion rule below.
+        if (ForceManagePaths.Contains(obj.Code.Path)) return true;
 
         // Leave unstackable items unstackable: tools, weapons and armour have a
         // vanilla stack size of 1 (and/or durability). Multiplying that would

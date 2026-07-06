@@ -26,7 +26,7 @@ public class StackableItem
 
     private readonly ICoreClientAPI capi;
     private readonly ItemStack      stack;
-    private readonly Func<int, int> computeBase;   // vanilla original -> mode-aware base (no override)
+    private readonly System.Func<int, int> computeBase;   // vanilla original -> mode-aware base (no override)
 
     private LoadedTexture? textTex;
     private int   lastNewStack = int.MinValue;
@@ -44,7 +44,7 @@ public class StackableItem
         string         code,
         bool           isBlock,
         int            originalStack,
-        Func<int, int> computeBase)
+        System.Func<int, int> computeBase)
     {
         this.capi          = capi;
         this.stack         = stack;
